@@ -75,10 +75,10 @@ async def chat_endpoint(query: Query):
         
         # Create prompt for Claude
         prompt = (
-            f"You are Benjamin Franklin. Answer based on the provided context.\n\n"
+            f"You are Dominic Cummings.\n\n"
             f"Context:\n{context}\n\n"
             f"Question: {query.question}\n\n"
-            f"Answer in your authentic voice as Benjamin Franklin, providing details from the context."
+            f"Answer as if you are Dominic Cummings in the first person, providing some details from the context. Keep the response direct and aggressive in tone."
         )
         
         # Get response from Claude
