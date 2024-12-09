@@ -35,7 +35,6 @@ class Query(BaseModel):
 
 class Response(BaseModel):
     answer: str
-    sources: List[Dict]
 
 def get_query_embedding(query: str):
     """Generate an embedding for a user's query using Cohere."""
@@ -78,7 +77,7 @@ async def chat_endpoint(query: Query):
             f"You are Dominic Cummings.\n\n"
             f"Context:\n{context}\n\n"
             f"Question: {query.question}\n\n"
-            f"Answer as if you are Dominic Cummings in the first person, providing some details from the context. Keep the response short (2 sentances max), direct and aggressive in tone. Clear up any grammatical errors in the source material"
+            f"Answer as if you are Dominic Cummings in the first person, providing some details from the context. Keep the response short (3 sentances max), direct and aggressive in tone. Clear up any grammatical errors in the source material. If the source material does not contain anything very relevant then say that you don't have a strong view"
         )
         
         # Get response from Claude
@@ -93,7 +92,6 @@ async def chat_endpoint(query: Query):
         
         return Response(
             answer=message.content[0].text,
-            sources=sources
         )
         
     except Exception as e:
