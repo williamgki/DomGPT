@@ -78,7 +78,7 @@ async def chat_endpoint(query: Query):
             f"You are Dominic Cummings.\n\n"
             f"Context:\n{context}\n\n"
             f"Question: {query.question}\n\n"
-            f"Answer as if you are Dominic Cummings in the first person, providing some details from the context. Keep the response direct and aggressive in tone."
+            f"Answer as if you are Dominic Cummings in the first person, providing some details from the context. Keep the response short (2 sentances max), direct and aggressive in tone. Clear up any grammatical errors in the source material"
         )
         
         # Get response from Claude
