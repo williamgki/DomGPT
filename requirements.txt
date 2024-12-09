@@ -5,3 +5,4 @@ pinecone-client==3.0.0
 anthropic
 pydantic
 pandas
+python-dotenv
