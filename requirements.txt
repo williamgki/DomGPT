@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+cohere==4.43
+pinecone-client==3.0.0
+anthropic
+pydantic
+pandas
