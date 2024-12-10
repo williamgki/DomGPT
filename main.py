@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import cohere
@@ -7,6 +7,8 @@ from anthropic import Client
 import os
 from typing import List, Dict
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 # Load environment variables
 load_dotenv()
@@ -30,12 +32,56 @@ anthropic_client = Client(api_key=os.getenv('ANTHROPIC_API_KEY'))
 # Connect to existing Pinecone index
 index = pc.Index("qa-chunks")
 
+# Rate limiting setup
+RATE_LIMIT_MINUTES = 30
+RATE_LIMIT_REQUESTS = 3
+
+class RateLimiter:
+    def __init__(self):
+        self.requests = defaultdict(list)
+    
+    def _clean_old_requests(self, ip: str):
+        """Remove requests older than the rate limit window"""
+        cutoff = datetime.now() - timedelta(minutes=RATE_LIMIT_MINUTES)
+        self.requests[ip] = [req for req in self.requests[ip] if req > cutoff]
+    
+    def is_rate_limited(self, ip: str) -> bool:
+        """Check if an IP has exceeded the rate limit"""
+        self._clean_old_requests(ip)
+        return len(self.requests[ip]) >= RATE_LIMIT_REQUESTS
+    
+    def add_request(self, ip: str):
+        """Record a new request"""
+        self._clean_old_requests(ip)
+        self.requests[ip].append(datetime.now())
+    
+    def get_remaining_requests(self, ip: str) -> dict:
+        """Get remaining requests and time until reset"""
+        self._clean_old_requests(ip)
+        requests_made = len(self.requests[ip])
+        requests_remaining = RATE_LIMIT_REQUESTS - requests_made
+        
+        if requests_made > 0:
+            oldest_request = min(self.requests[ip])
+            reset_time = oldest_request + timedelta(minutes=RATE_LIMIT_MINUTES)
+            seconds_until_reset = max(0, (reset_time - datetime.now()).total_seconds())
+        else:
+            seconds_until_reset = 0
+            
+        return {
+            "requests_remaining": requests_remaining,
+            "seconds_until_reset": int(seconds_until_reset)
+        }
+
+rate_limiter = RateLimiter()
+
 class Query(BaseModel):
     question: str
     style: str = "blog"  # Default to blog style if not specified
 
 class Response(BaseModel):
     answer: str
+    rate_limit_info: dict
 
 # Few-shot examples for Twitter style
 TWITTER_EXAMPLES = """
@@ -61,7 +107,7 @@ The NFU is telling farmers NOT to come to London to demonstrate.
 TERRIBLE ADVICE.
 I've been in the PM office when
 
-Now answer this question in a similar style, but keep the response short and punch - 3 sentances max"""
+Now answer this question in a similar style, but keep the response short and punch - 3 sentances max. Try to use at least one emoji"""
 
 def get_query_embedding(query: str):
     """Generate an embedding for a user's query using Cohere."""
@@ -93,9 +139,32 @@ def get_style_specific_prompt(style: str, context: str, question: str) -> str:
             f"Limit to 4-5 sentences."
         )
 
+def get_client_ip(request: Request) -> str:
+    """Get client IP, handling proxy headers"""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0]
+    return request.client.host
+
 @app.post("/api/chat", response_model=Response)
-async def chat_endpoint(query: Query):
+async def chat_endpoint(query: Query, request: Request):
+    client_ip = get_client_ip(request)
+    
+    # Check rate limit
+    if rate_limiter.is_rate_limited(client_ip):
+        rate_info = rate_limiter.get_remaining_requests(client_ip)
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": "Rate limit exceeded",
+                "rate_limit_info": rate_info
+            }
+        )
+    
     try:
+        # Record this request
+        rate_limiter.add_request(client_ip)
+        
         # Generate embedding for the question
         query_embedding = get_query_embedding(query.question)
         
@@ -128,12 +197,24 @@ async def chat_endpoint(query: Query):
             ]
         )
         
+        # Get rate limit info for response
+        rate_info = rate_limiter.get_remaining_requests(client_ip)
+        
         return Response(
             answer=message.content[0].text,
+            rate_limit_info=rate_info
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if not isinstance(e, HTTPException):  # Don't wrap HTTP exceptions
+            raise HTTPException(status_code=500, detail=str(e))
+        raise
+
+@app.get("/api/rate_limit_status")
+async def rate_limit_status(request: Request):
+    """Get current rate limit status"""
+    client_ip = get_client_ip(request)
+    return rate_limiter.get_remaining_requests(client_ip)
 
 @app.get("/api/health")
 async def health_check():
