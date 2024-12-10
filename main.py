@@ -61,7 +61,7 @@ The NFU is telling farmers NOT to come to London to demonstrate.
 TERRIBLE ADVICE.
 I've been in the PM office when
 
-Now answer this question in a similar style:"""
+Now answer this question in a similar style, but keep the response short and punch - 3 sentances max"""
 
 def get_query_embedding(query: str):
     """Generate an embedding for a user's query using Cohere."""
