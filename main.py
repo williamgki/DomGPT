@@ -30,7 +30,7 @@ pc = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
 anthropic_client = Client(api_key=os.getenv('ANTHROPIC_API_KEY'))
 
 # Connect to existing Pinecone index
-index = pc.Index("qa-chunks")
+index = pc.Index("tweets-index")
 
 # Rate limiting setup
 RATE_LIMIT_MINUTES = 30
@@ -169,11 +169,18 @@ async def chat_endpoint(query: Query, request: Request):
         query_embedding = get_query_embedding(query.question)
         
         # Query Pinecone
-        results = index.query(
-            vector=query_embedding,
-            top_k=5,
-            include_metadata=True
-        )
+        if query.style == "blog":
+            results = index.query(
+                vector=query_embedding,
+                top_k=5,
+                include_metadata=True
+            )
+        else:  # twitter
+            results = index.query(
+                vector=query_embedding, namespace="tweets",
+                top_k=5,
+                include_metadata=True
+            )
         
         # Extract relevant passages
         context_passages = []
