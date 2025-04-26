@@ -150,6 +150,16 @@ def get_client_ip(request: Request) -> str:
 @app.post("/api/chat", response_model=Response)
 async def chat_endpoint(query: Query, request: Request):
     client_ip = get_client_ip(request)
+    try:
+        # … everything up through Response(...)
+    except HTTPException:
+            # let FastAPI handle its own HTTPExceptions
+        raise
+    except Exception as e:
+            # print the full traceback to stdout
+        traceback.print_exc()
+            # re-raise so the client still gets the 500
+        raise
     
     # Check rate limit
     if rate_limiter.is_rate_limited(client_ip):
