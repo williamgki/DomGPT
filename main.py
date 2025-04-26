@@ -136,7 +136,8 @@ def get_style_specific_prompt(style: str, context: str, question: str) -> str:
             f"and maintain an assertive tone, but allow for more nuance and explanation "
             f"than in a tweet. If the source material isn't relevant, acknowledge this "
             f"but provide your perspective based on your general knowledge and views. "
-            f"Limit to 4-5 sentences."
+            f"Limit to 4-5 sentences.\n\n"
+            f"A:"
         )
 
 def get_client_ip(request: Request) -> str:
