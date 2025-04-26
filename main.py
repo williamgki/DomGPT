@@ -1,7 +1,5 @@
 import os
 import traceback
-from datetime import datetime, timedelta
-from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,39 +32,6 @@ anthropic_client = Client(api_key=os.getenv("ANTHROPIC_API_KEY"))
 # Connect to Pinecone index
 index = pc.Index("qa-chunks")
 
-# Rate limiting constants\RATE_LIMIT_MINUTES = 30
-RATE_LIMIT_REQUESTS = 3
-
-class RateLimiter:
-    def __init__(self):
-        self.requests = defaultdict(list)
-
-    def _clean_old_requests(self, ip: str):
-        cutoff = datetime.now() - timedelta(minutes=RATE_LIMIT_MINUTES)
-        self.requests[ip] = [r for r in self.requests[ip] if r > cutoff]
-
-    def is_rate_limited(self, ip: str) -> bool:
-        self._clean_old_requests(ip)
-        return len(self.requests[ip]) >= RATE_LIMIT_REQUESTS
-
-    def add_request(self, ip: str):
-        self._clean_old_requests(ip)
-        self.requests[ip].append(datetime.now())
-
-    def get_remaining_requests(self, ip: str) -> dict:
-        self._clean_old_requests(ip)
-        made = len(self.requests[ip])
-        remaining = RATE_LIMIT_REQUESTS - made
-        if made > 0:
-            oldest = min(self.requests[ip])
-            reset = oldest + timedelta(minutes=RATE_LIMIT_MINUTES)
-            secs = max(0, (reset - datetime.now()).total_seconds())
-        else:
-            secs = 0
-        return {"requests_remaining": remaining, "seconds_until_reset": int(secs)}
-
-rate_limiter = RateLimiter()
-
 # Pydantic models
 class Query(BaseModel):
     question: str
@@ -74,7 +39,6 @@ class Query(BaseModel):
 
 class ResponseModel(BaseModel):
     answer: str
-    rate_limit_info: dict
 
 # Few-shot examples for Twitter style
 TWITTER_EXAMPLES = (
@@ -123,20 +87,11 @@ def get_client_ip(request: Request) -> str:
         return forwarded.split(",")[0]
     return request.client.host
 
-# API endpoints
-
+# Chat endpoint without rate limiting
 @app.post("/api/chat", response_model=ResponseModel)
 async def chat_endpoint(query: Query, request: Request):
-    ip = get_client_ip(request)
-    if rate_limiter.is_rate_limited(ip):
-        info = rate_limiter.get_remaining_requests(ip)
-        raise HTTPException(
-            status_code=429,
-            detail={"message": "Rate limit exceeded", "rate_limit_info": info}
-        )
-
     try:
-        rate_limiter.add_request(ip)
+        # Generate embedding and context
         embedding = get_query_embedding(query.question)
         results = index.query(
             vector=embedding,
@@ -145,6 +100,7 @@ async def chat_endpoint(query: Query, request: Request):
         )
         context = " ".join(match['metadata']['text'] for match in results['matches'])
 
+        # Build prompt and get response
         prompt = get_style_specific_prompt(query.style, context, query.question)
         anth_resp = anthropic_client.messages.create(
             model="claude-3-5-sonnet-latest",
@@ -157,20 +113,13 @@ async def chat_endpoint(query: Query, request: Request):
         blocks = getattr(anth_resp, 'content', []) or []
         answer_text = blocks[0].text if blocks else ""
 
-        rate_info = rate_limiter.get_remaining_requests(ip)
-        return ResponseModel(answer=answer_text, rate_limit_info=rate_info)
+        return ResponseModel(answer=answer_text)
 
-    except HTTPException:
-        raise
     except Exception:
         traceback.print_exc()
-        raise
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/api/rate_limit_status")
-async def rate_limit_status(request: Request):
-    ip = get_client_ip(request)
-    return rate_limiter.get_remaining_requests(ip)
-
+# Health check
 @app.get("/api/health")
 async def health_check():
     return {"status": "healthy"}
