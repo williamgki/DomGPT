@@ -103,7 +103,7 @@ async def chat_endpoint(query: Query, request: Request):
         # Build prompt and get response
         prompt = get_style_specific_prompt(query.style, context, query.question)
         anth_resp = anthropic_client.messages.create(
-            model="claude-3-5-sonnet-latest",
+            model="claude-3-7-sonnet-20250219",
             max_tokens=400,
             temperature=0.0 if query.style == "blog" else 0.7,
             messages=[{"role": "user", "content": prompt}]
