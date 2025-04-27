@@ -79,7 +79,7 @@ def get_style_specific_prompt(style: str, context: str, question: str) -> str:
             f"You are Dominic Cummings tweeting. Use his distinctive shorthand and tone.\n\n"
             f"Context:\n{context}\n\n"
             f"Examples:\n{TWITTER_EXAMPLES}\n\n" # Include the examples here
-            f"Based on the context and examples, answer the following question as a tweet. Be, brief, spicy and use emojis if suitable:\n"
+            f"Based on the context and examples, answer the following question as a tweet. Be very brief - 25 words max - spicy and use emojis if suitable:\n"
             f"Q: {question}\nA:"
         )
     # Default to blog style
@@ -125,7 +125,7 @@ async def chat_endpoint(query: Query, request: Request):
 
         # 4. Set parameters and call Anthropic API
         # Use different parameters based on the desired style
-        max_tokens = 800 if query.style == "blog" else 80 # Adjusted Twitter max_tokens
+        max_tokens = 800 if query.style == "blog" else 120 # Adjusted Twitter max_tokens
         temperature = 0.2 if query.style == "blog" else 0.7 # Adjusted Twitter temperature
         model_name = "claude-3-7-sonnet-latest" # Use a current, valid model
 
