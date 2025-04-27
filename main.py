@@ -125,7 +125,7 @@ async def chat_endpoint(query: Query, request: Request):
 
         # 4. Set parameters and call Anthropic API
         # Use different parameters based on the desired style
-        max_tokens = 800 if query.style == "blog" else 280 # Adjusted Twitter max_tokens
+        max_tokens = 800 if query.style == "blog" else 80 # Adjusted Twitter max_tokens
         temperature = 0.2 if query.style == "blog" else 0.7 # Adjusted Twitter temperature
         model_name = "claude-3-7-sonnet-latest" # Use a current, valid model
 
